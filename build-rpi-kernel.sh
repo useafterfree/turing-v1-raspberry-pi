@@ -10,6 +10,14 @@ elif [[ "${HOST_ARCH}" == "armv7l" ]]; then
     HOST_ARCH="arm"
 fi
 
+check_package() {
+    if ! dpkg -s "$1" >/dev/null 2>&1; then
+        echo "Package $1 is not installed. Installing..."
+        sudo apt install -y "$1"
+    fi
+}
+
+
 ## We need gum to be installed
 if ! command -v gum &> /dev/null; then
     echo "gum could not be found, please install it first."
@@ -26,6 +34,8 @@ if ! command -v gum &> /dev/null; then
     fi
 fi
 
+## check build environment
+for pkg in bc bison flex libssl-dev make; do check_package "$pkg"; done
 
 ## Determine which BCM chip to build for based on raspberry pi model name
 ## create gum options for each raspberry pi model name
@@ -61,7 +71,7 @@ if [[ "${TARGET_ARCH}" != "arm" && "${TARGET_ARCH}" != "aarch64" ]]; then
     exit 1
 fi
 
-echo "Building for ${BOARD_CHOICE} for on ${HOST_ARCH} ${TARGET_ARCH}bit architecture."
+echo "Building for ${BOARD_CHOICE} for on ${HOST_ARCH} ${TARGET_BITS}bit architecture."
 
 CONFIG="$(grep -r "^${BOARD_CHOICE}$" ./${TARGET_BITS} | cut -d: -f1 | xargs basename)"
 
@@ -95,10 +105,10 @@ if [[ "${HOST_ARCH}" != "${TARGET_ARCH}" ]]; then
         echo "Setting up cross compilation for 64-bit architecture..."
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-gnu-
-        sudo apt install crossbuild-essential-arm64 -y
+        check_package crossbuild-essential-arm64
     else
         echo "Setting up cross compilation for 32-bit architecture..."
-        sudo apt install crossbuild-essential-armhf -y
+        check_package crossbuild-essential-armhf
         export ARCH=arm
         export CROSS_COMPILE=arm-linux-gnueabihf-
     fi
@@ -110,8 +120,6 @@ fi
 
 if [[ ! -z "${ARCH}" && ! -z "${CROSS_COMPILE}" ]]; then
     echo "Cross compilation is set up with ARCH=${ARCH} and CROSS_COMPILE=${CROSS_COMPILE}"
-else
-    echo "No cross compilation is needed, compiling natively."
 fi
 
 OPTIONS=" "
@@ -124,7 +132,7 @@ if [[ ! -z "${CROSS_COMPILE}" ]]; then
     OPTIONS="${OPTIONS}CROSS_COMPILE=${CROSS_COMPILE} "
 fi
 
-sudo make -j${CORES} clean
+# sudo make -j${CORES} clean
 echo "Executing: sudo make -j${CORES}${OPTIONS}${CONFIG}_defconfig"
 sudo make -j${CORES}${OPTIONS}${CONFIG}_defconfig
 
@@ -149,12 +157,67 @@ fi
 
 echo "Building kernel with ${CONFIG} configuration..."
 
+
+copy_kernel_to_disk() {
+
+    DATETIME=$(date +%Y%m%d-%H%M%S)
+    echo "🔍 Scanning for block devices..."
+    DISK=$(lsblk -dpno NAME,SIZE,MODEL | grep -v "loop" | gum choose --header "Select target disk")
+    DISK=$(echo "${DISK}" | awk '{print $1}')
+    if [[ -z "${DISK}" ]]; then
+        echo "No disk selected. Exiting..."
+        exit 1
+    fi
+    echo "Selected disk: ${DISK}"
+    mkdir -p mnt/boot
+    mkdir -p mnt/root
+    sudo mount ${DISK}1 mnt/boot
+    sudo mount ${DISK}2 mnt/root
+
+    sudo env PATH=$PATH make -j${CORES}${OPTIONS}INSTALL_MOD_PATH=mnt/root modules_install
+
+    if [[ $TARGET_BITS == "64" ]]; then
+        sudo cp mnt/boot/$KERNEL.img mnt/boot/$KERNEL-backup-${DATETIME}.img
+        sudo cp arch/arm64/boot/Image mnt/boot/$KERNEL.img
+        sudo cp arch/arm64/boot/dts/broadcom/*.dtb mnt/boot/
+        sudo cp arch/arm64/boot/dts/overlays/*.dtb* mnt/boot/overlays/
+        sudo cp arch/arm64/boot/dts/overlays/README mnt/boot/overlays/
+        sudo umount mnt/boot
+        sudo umount mnt/root
+    else
+        sudo cp mnt/boot/$KERNEL.img mnt/boot/$KERNEL-backup-${DATETIME}.img
+        sudo cp arch/arm/boot/zImage mnt/boot/$KERNEL.img
+        sudo cp arch/arm/boot/dts/broadcom/*.dtb mnt/boot/
+        sudo cp arch/arm/boot/dts/overlays/*.dtb* mnt/boot/overlays/
+        sudo cp arch/arm/boot/dts/overlays/README mnt/boot/overlays/
+        sudo umount mnt/boot
+        sudo umount mnt/root
+    fi
+    IMAGE_ANOTHER=$(gum choose "yes" "no" --header "Do you want to copy the kernel image to another disk?")
+    echo "Kernel image copied to ${DISK} successfully."
+    if [[ "${IMAGE_ANOTHER}" == "yes" ]]; then
+        copy_kernel_to_disk
+    fi
+}
+
 if [[ ${TARGET_BITS} == "64" ]]; then
     echo "Building 64-bit kernel..."
     echo sudo make -j${CORES}${OPTIONS}Image dtbs modules
-    sudo make -j${CORES}${OPTIONS}Image dtbs modules
+    if sudo make -j${CORES}${OPTIONS}Image dtbs modules; then
+        echo "Kernel build successful."
+        copy_kernel_to_disk
+    else
+        echo "Kernel build failed. Please check the output for errors."
+        exit 1
+    fi
 else
     echo "Building 32-bit kernel..."
     echo sudo make -j${CORES}${OPTIONS}zImage dtbs modules
-    sudo make -j${CORES}${OPTIONS}zImage dtbs modules
+    if sudo make -j${CORES}${OPTIONS}zImage dtbs modules; then
+        echo "Kernel build successful."
+        copy_kernel_to_disk
+    else
+        echo "Kernel build failed. Please check the output for errors."
+        exit 1
+    fi
 fi
