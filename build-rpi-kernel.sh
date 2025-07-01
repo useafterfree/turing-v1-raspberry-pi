@@ -46,7 +46,8 @@ KERNEL_NAME="${kernel_names[$CONFIG]}"
 
 ## clone repo
 if [[ ! -d "${LINUX_REPO_DIR}" ]]; then
-    git clone --depth=1 https://github.com/raspberrypi/linux ${LINUX_REPO_DIR}
+    sudo mkdir -p ${LINUX_REPO_DIR}
+    sudo git clone --depth=1 https://github.com/raspberrypi/linux ${LINUX_REPO_DIR}
 fi
 
 cd ${LINUX_REPO_DIR}
