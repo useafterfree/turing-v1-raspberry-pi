@@ -11,4 +11,6 @@ git clone https://github.com/useafterfree/turing-v1-raspberry-pi
 cd turing-v1-raspberry-pi
 ```
 # Run helper script
-`./build-rpi-kernel.sh`
+```
+./build-rpi-kernel.sh
+```
