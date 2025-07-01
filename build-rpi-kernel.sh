@@ -30,7 +30,7 @@ FOUND=$(grep -r "^${CHOICE}$")
 ## loop through FOUND and get the folder and file name
 ARCH=$(echo "$FOUND" | cut -d: -f1 | xargs dirname | sed 's/\.\///g' | sort -u | gum choose --limit 1 --header "Select the Architecture for $CHOICE")
 
-echo "Building for ${CHOICE} on ${ARCH}"
+echo "Building for ${CHOICE} on ${ARCH}bit architecture."
 
 CONFIG="$(grep -r "^${CHOICE}$" ./${ARCH} | cut -d: -f1 | xargs basename)"
 
