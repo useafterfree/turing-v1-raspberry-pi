@@ -1,6 +1,6 @@
 # turing-v1-raspberry-pi
 
-Tooling to support Istio / Envoy in the Rasbberry pi kernel
+Tooling to rebuild the Rasbberry pi kernel to support Istio / Envoy on Kubernetes
 
 # Requirements: gum
 Follow instructions at https://github.com/charmbracelet/gum
