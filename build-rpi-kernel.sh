@@ -8,6 +8,9 @@ LAST_CONFIG_FILE="${REPO_DIR}/.config-last"
 CORES=$(( $(nproc) - 1 ))
 HOST_ARCH=$(uname -m)
 HOST_BITS=$(getconf LONG_BIT)
+
+IMAGE_FILE=Image
+
 if [[ "${HOST_ARCH}" == "x86_64" ]]; then
     HOST_ARCH="amd64"
 elif [[ "${HOST_ARCH}" == "armv7l" ]]; then
@@ -48,6 +51,11 @@ BOARD_CHOICE=$(gum table < boards.csv)
 
 ## We need to split the BOARD_CHOICE to get the Board, BCM chip, and bits
 IFS=',' read -r BOARD CONFIG TARGET_BITS <<< "$BOARD_CHOICE"
+
+if [[ ${TARGET_BITS} == "32" ]]; then
+    IMAGE_FILE=zImage
+fi
+
 
 if [[ -z "${TARGET_BITS}" ]]; then
     echo "No architecture found for ${BOARD_CHOICE}. Exiting..."
@@ -166,9 +174,6 @@ if [[ ${TARGET_BITS} == "64" ]]; then
     fi
 fi
 
-echo "Building kernel with ${CONFIG} configuration..."
-
-
 copy_kernel_to_disk() {
 
     DATETIME=$(date +%Y%m%d-%H%M%S)
@@ -179,7 +184,9 @@ copy_kernel_to_disk() {
         echo "No disk selected. Exiting..."
         exit 1
     fi
-    echo "Selected disk: ${DISK}"
+
+    gum confirm && echo "Selected disk: ${DISK}" || exit 1
+
     mkdir -p mnt/boot
     mkdir -p mnt/root
     sudo mount ${DISK}1 mnt/boot
@@ -187,23 +194,14 @@ copy_kernel_to_disk() {
 
     sudo env PATH=$PATH make -j${CORES}${OPTIONS}INSTALL_MOD_PATH=mnt/root modules_install
 
-    if [[ $TARGET_BITS == "64" ]]; then
-        sudo cp mnt/boot/$KERNEL.img mnt/boot/$KERNEL-backup-${DATETIME}.img
-        sudo cp arch/arm64/boot/Image mnt/boot/$KERNEL.img
-        sudo cp arch/arm64/boot/dts/broadcom/*.dtb mnt/boot/
-        sudo cp arch/arm64/boot/dts/overlays/*.dtb* mnt/boot/overlays/
-        sudo cp arch/arm64/boot/dts/overlays/README mnt/boot/overlays/
-        sudo umount mnt/boot
-        sudo umount mnt/root
-    else
-        sudo cp mnt/boot/$KERNEL.img mnt/boot/$KERNEL-backup-${DATETIME}.img
-        sudo cp arch/arm/boot/zImage mnt/boot/$KERNEL.img
-        sudo cp arch/arm/boot/dts/broadcom/*.dtb mnt/boot/
-        sudo cp arch/arm/boot/dts/overlays/*.dtb* mnt/boot/overlays/
-        sudo cp arch/arm/boot/dts/overlays/README mnt/boot/overlays/
-        sudo umount mnt/boot
-        sudo umount mnt/root
-    fi
+    sudo cp mnt/boot/$KERNEL.img mnt/boot/$KERNEL-backup-${DATETIME}.img
+    sudo cp arch/${TARGET_ARCH}/boot/${IMAGE_FILE} mnt/boot/$KERNEL.img
+    sudo cp arch/${TARGET_ARCH}/boot/dts/broadcom/*.dtb mnt/boot/
+    sudo cp arch/${TARGET_ARCH}/boot/dts/overlays/*.dtb* mnt/boot/overlays/
+    sudo cp arch/${TARGET_ARCH}/boot/dts/overlays/README mnt/boot/overlays/
+    sudo umount mnt/boot
+    sudo umount mnt/root
+
     IMAGE_ANOTHER=$(gum choose "yes" "no" --header "Do you want to copy the kernel image to another disk?")
     echo "Kernel image copied to ${DISK} successfully."
     if [[ "${IMAGE_ANOTHER}" == "yes" ]]; then
@@ -211,24 +209,12 @@ copy_kernel_to_disk() {
     fi
 }
 
-if [[ ${TARGET_BITS} == "64" ]]; then
-    echo "Building 64-bit kernel..."
-    echo sudo make -j${CORES}${OPTIONS}Image dtbs modules
-    if sudo make -j${CORES}${OPTIONS}Image dtbs modules; then
-        echo "Kernel build successful."
-        copy_kernel_to_disk
-    else
-        echo "Kernel build failed. Please check the output for errors."
-        exit 1
-    fi
+echo "Building ${TARGET_BITS}-bit kernel with ${CONFIG} configuration..."
+echo sudo make -j${CORES}${OPTIONS}${IMAGE_FILE} dtbs modules
+if sudo make -j${CORES}${OPTIONS}${IMAGE_FILE} dtbs modules; then
+    echo "Kernel build successful."
+    copy_kernel_to_disk
 else
-    echo "Building 32-bit kernel..."
-    echo sudo make -j${CORES}${OPTIONS}zImage dtbs modules
-    if sudo make -j${CORES}${OPTIONS}zImage dtbs modules; then
-        echo "Kernel build successful."
-        copy_kernel_to_disk
-    else
-        echo "Kernel build failed. Please check the output for errors."
-        exit 1
-    fi
+    echo "Kernel build failed. Please check the output for errors."
+    exit 1
 fi
