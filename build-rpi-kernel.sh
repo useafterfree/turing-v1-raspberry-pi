@@ -1,6 +1,10 @@
 #!/bin/bash
 
+trap 'exit' INT TERM
+
+REPO_DIR=$(pwd)
 LINUX_REPO_DIR="/opt/linux"
+LAST_CONFIG_FILE="${REPO_DIR}/.config-last"
 CORES=$(( $(nproc) - 1 ))
 HOST_ARCH=$(uname -m)
 HOST_BITS=$(getconf LONG_BIT)
@@ -39,21 +43,11 @@ for pkg in bc bison flex libssl-dev make; do check_package "$pkg"; done
 
 ## Determine which BCM chip to build for based on raspberry pi model name
 ## create gum options for each raspberry pi model name
+echo "Which Raspberry Pi do you want to build for?"
+BOARD_CHOICE=$(gum table < boards.csv)
 
-BOARD_CHOICE=$(cat */* | gum choose --limit 1 --header "Which Raspberry Pi do you want to build for?")
-
-## find which folder and file this choise is in
-
-FOUND_ARCHS=$(grep -r "^${BOARD_CHOICE}$")
-
-## if we have multiple board results, we need to choose the architecture manually
-if [[ $(echo "$FOUND_ARCHS" | wc -l) -gt 1 ]]; then
-    echo "Found multiple results for ${BOARD_CHOICE}. Please select the architecture:"
-    ## loop through FOUND and get the folder and file name
-    TARGET_BITS=$(echo "$FOUND_ARCHS" | cut -d: -f1 | xargs dirname | sed 's/\.\///g' | sort -u | gum choose --limit 1 --header "Select the Architecture for $BOARD_CHOICE")
-else
-    TARGET_BITS=$(echo "$FOUND_ARCHS" | cut -d: -f1 | xargs dirname | sed 's/\.\///g')
-fi
+## We need to split the BOARD_CHOICE to get the Board, BCM chip, and bits
+IFS=',' read -r BOARD CONFIG TARGET_BITS <<< "$BOARD_CHOICE"
 
 if [[ -z "${TARGET_BITS}" ]]; then
     echo "No architecture found for ${BOARD_CHOICE}. Exiting..."
@@ -66,14 +60,6 @@ elif [[ "${TARGET_BITS}" == "64" ]]; then
     TARGET_ARCH="aarch64"
 fi
 
-if [[ "${TARGET_ARCH}" != "arm" && "${TARGET_ARCH}" != "aarch64" ]]; then
-    echo "Invalid architecture selected: ${TARGET_ARCH}. Please select either 'arm' or 'aarch64'."
-    exit 1
-fi
-
-echo "Building for ${BOARD_CHOICE} for on ${HOST_ARCH} ${TARGET_BITS}bit architecture."
-
-CONFIG="$(grep -r "^${BOARD_CHOICE}$" ./${TARGET_BITS} | cut -d: -f1 | xargs basename)"
 
 ## Make an associative array to hold the kernel names
 declare -A kernel_names
@@ -85,6 +71,7 @@ kernel_names["bcm2712"]="kernel_2712"
 
 export KERNEL_NAME="${kernel_names[$CONFIG]}"
 
+echo "Building for ${BOARD} for on ${HOST_ARCH} with ${TARGET_BITS}bit architecture."
 echo "Using kernel name: ${KERNEL_NAME}"
 
 ## clone repo
@@ -93,7 +80,32 @@ if [[ ! -d "${LINUX_REPO_DIR}" ]]; then
     sudo git clone --depth=1 https://github.com/raspberrypi/linux ${LINUX_REPO_DIR}
 fi
 
+
+DIRTY=false
+## we clean if the options have changed
+if [[ -f ${LAST_CONFIG_FILE} ]]; then
+    echo "Found previous config file. Checking if we need to clean..."
+    if ! grep -q "${BOARD_CHOICE}" ${LAST_CONFIG_FILE}; then
+        echo "The previous configuration file does not match the current board choice. Cleaning the build..."
+        DIRTY=true
+    fi
+fi
+
+## Save the current configuration to the last config file
+echo "${BOARD_CHOICE}" > ${LAST_CONFIG_FILE}
+
 cd ${LINUX_REPO_DIR}
+
+if [[ "${DIRTY}" == "true" ]]; then
+    echo "Cleaning the build ..."
+    sudo make -j${CORES} clean
+fi
+
+## We just always remove the .config file to start fresh
+if [[ -f .config ]]; then
+    echo "Removing existing .config file..."
+    sudo rm .config
+fi
 
 ## Do we need to cross compile?
 
@@ -132,7 +144,6 @@ if [[ ! -z "${CROSS_COMPILE}" ]]; then
     OPTIONS="${OPTIONS}CROSS_COMPILE=${CROSS_COMPILE} "
 fi
 
-# sudo make -j${CORES} clean
 echo "Executing: sudo make -j${CORES}${OPTIONS}${CONFIG}_defconfig"
 sudo make -j${CORES}${OPTIONS}${CONFIG}_defconfig
 

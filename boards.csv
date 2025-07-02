@@ -1,0 +1,22 @@
+Model,Config,Bits
+Raspberry Pi 3,bcm2711,64
+Compute Module 3,bcm2711,64
+Raspberry Pi 3+,bcm2711,64
+Compute Module 3+,bcm2711,64
+Raspberry Pi Zero 2 W,bcm2711,64
+Raspberry Pi 4,bcm2711,64
+Pi 400,bcm2711,64
+Compute Module 4,bcm2711,64
+Compute Module 4S,bcm2711,64
+Raspberry Pi 5,bcm2712,64
+Pi 500,bcm2712,64
+Compute Module 5,bcm2712,64
+Raspberry Pi 2,bcm2709,32
+Raspberry Pi 3,bcm2709,32
+Compute Module 3,bcm2709,32
+Raspberry Pi 3+,bcm2709,32
+Compute Module 3+,bcm2709,32
+Raspberry Pi 1,bcm2710,32
+Compute Module 1,bcm2710,32
+Zero,bcm2709,32
+Zero W,bcm2709,32
