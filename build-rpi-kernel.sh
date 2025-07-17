@@ -174,7 +174,7 @@ if [[ ${TARGET_BITS} == "64" ]]; then
     fi
 fi
 
-copy_kernel_to_disk() {
+copy_kernel_and_modules_to_disk() {
 
     DATETIME=$(date +%Y%m%d-%H%M%S)
     echo "🔍 Scanning for block devices..."
@@ -202,10 +202,10 @@ copy_kernel_to_disk() {
     sudo umount mnt/boot
     sudo umount mnt/root
 
-    IMAGE_ANOTHER=$(gum choose "yes" "no" --header "Do you want to copy the kernel image to another disk?")
+    IMAGE_ANOTHER=$(gum choose "yes" "no" --header "Do you want to copy the kernel image and modules to another disk?")
     echo "Kernel image copied to ${DISK} successfully."
     if [[ "${IMAGE_ANOTHER}" == "yes" ]]; then
-        copy_kernel_to_disk
+        copy_kernel_and_modules_to_disk
     fi
 }
 
@@ -213,7 +213,7 @@ echo "Building ${TARGET_BITS}-bit kernel with ${CONFIG} configuration..."
 echo sudo make -j${CORES}${OPTIONS}${IMAGE_FILE} dtbs modules
 if sudo make -j${CORES}${OPTIONS}${IMAGE_FILE} dtbs modules; then
     echo "Kernel build successful."
-    copy_kernel_to_disk
+    copy_kernel_and_modules_to_disk
 else
     echo "Kernel build failed. Please check the output for errors."
     exit 1
