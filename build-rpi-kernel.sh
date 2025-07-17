@@ -195,10 +195,10 @@ copy_kernel_and_modules_to_disk() {
     sudo env PATH=$PATH make -j${CORES}${OPTIONS}INSTALL_MOD_PATH=mnt/root modules_install
 
     sudo cp mnt/boot/$KERNEL.img mnt/boot/$KERNEL-backup-${DATETIME}.img
-    sudo cp arch/${TARGET_ARCH}/boot/${IMAGE_FILE} mnt/boot/$KERNEL.img
-    sudo cp arch/${TARGET_ARCH}/boot/dts/broadcom/*.dtb mnt/boot/
-    sudo cp arch/${TARGET_ARCH}/boot/dts/overlays/*.dtb* mnt/boot/overlays/
-    sudo cp arch/${TARGET_ARCH}/boot/dts/overlays/README mnt/boot/overlays/
+    sudo cp arch/${ARCH}/boot/${IMAGE_FILE} mnt/boot/$KERNEL.img
+    sudo cp arch/${ARCH}/boot/dts/broadcom/*.dtb mnt/boot/
+    sudo cp arch/${ARCH}/boot/dts/overlays/*.dtb* mnt/boot/overlays/
+    sudo cp arch/${ARCH}/boot/dts/overlays/README mnt/boot/overlays/
     sudo umount mnt/boot
     sudo umount mnt/root
 
