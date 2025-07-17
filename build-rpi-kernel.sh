@@ -77,7 +77,7 @@ kernel_names["bcm2710"]="kernel7l"
 kernel_names["bcm2711"]="kernel8"
 kernel_names["bcm2712"]="kernel_2712"
 
-export KERNEL_NAME="${kernel_names[$CONFIG]}"
+export KERNEL="${kernel_names[$CONFIG]}"
 
 echo "Building for ${BOARD} for on ${HOST_ARCH} with ${TARGET_BITS}bit architecture."
 echo "Using kernel name: ${KERNEL_NAME}"
@@ -187,8 +187,8 @@ copy_kernel_to_disk() {
 
     gum confirm && echo "Selected disk: ${DISK}" || exit 1
 
-    mkdir -p mnt/boot
-    mkdir -p mnt/root
+    sudo mkdir -p mnt/boot
+    sudo mkdir -p mnt/root
     sudo mount ${DISK}1 mnt/boot
     sudo mount ${DISK}2 mnt/root
 
